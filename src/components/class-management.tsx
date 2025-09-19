@@ -5,10 +5,21 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { QRCodeGenerator } from '@/components/ui/qr-code-generator';
-import { Calendar, Clock, Users, Plus, QrCode, Eye, EyeOff, BarChart3 } from 'lucide-react';
+import { Calendar, Clock, Users, Plus, QrCode, Eye, EyeOff, BarChart3, Trash2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { ClassAnalytics } from './class-analytics';
+import { 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 interface AttendanceClass {
   id: string;
@@ -124,6 +135,44 @@ export const ClassManagement = ({ onClassSelect }: ClassManagementProps) => {
 
   const toggleAnalytics = (classId: string) => {
     setShowAnalytics(showAnalytics === classId ? null : classId);
+  };
+
+  const handleDeleteClass = async (classId: string, className: string) => {
+    setLoading(true);
+
+    try {
+      // First delete all attendance records for this class
+      const { error: attendanceError } = await supabase
+        .from('attendance_records')
+        .delete()
+        .eq('class_id', classId);
+
+      if (attendanceError) throw attendanceError;
+
+      // Then delete the class
+      const { error: classError } = await supabase
+        .from('classes')
+        .delete()
+        .eq('id', classId);
+
+      if (classError) throw classError;
+
+      toast({
+        title: "Success",
+        description: `Class "${className}" deleted successfully`,
+      });
+
+      fetchClasses();
+    } catch (error) {
+      console.error('Error deleting class:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete class",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -251,27 +300,28 @@ export const ClassManagement = ({ onClassSelect }: ClassManagementProps) => {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="flex-1"
                       onClick={() => toggleQrCode(classItem.id)}
                     >
                       {showQrCode === classItem.id ? (
-                        <><EyeOff className="h-4 w-4 mr-1" /> Hide QR</>
+                        <><EyeOff className="h-3 w-3 mr-1" /> Hide QR</>
                       ) : (
-                        <><QrCode className="h-4 w-4 mr-1" /> Show QR</>
+                        <><QrCode className="h-3 w-3 mr-1" /> QR</>
                       )}
                     </Button>
                     <Button
                       variant="outline"
                       size="sm"
-                      className="flex-1"
                       onClick={() => toggleAnalytics(classItem.id)}
                     >
                       {showAnalytics === classItem.id ? (
-                        <><EyeOff className="h-4 w-4 mr-1" /> Hide Stats</>
+                        <><EyeOff className="h-3 w-3 mr-1" /> Hide</>
                       ) : (
-                        <><BarChart3 className="h-4 w-4 mr-1" /> Analytics</>
+                        <><BarChart3 className="h-3 w-3 mr-1" /> Stats</>
                       )}
                     </Button>
+                  </div>
+                  
+                  <div className="flex gap-2 mt-2">
                     <Button
                       size="sm"
                       className="flex-1"
@@ -279,6 +329,35 @@ export const ClassManagement = ({ onClassSelect }: ClassManagementProps) => {
                     >
                       Select
                     </Button>
+                    
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Delete Class Session</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Are you sure you want to delete "{classItem.name}"? This will also delete all attendance records for this class. This action cannot be undone.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => handleDeleteClass(classItem.id, classItem.name)}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                          >
+                            Delete
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
                   </div>
                 </div>
               ))}
