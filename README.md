@@ -3,7 +3,7 @@
 ## Project info
 this is smart attendance management system which works on the principle of QR code to smartly mark attendence of student, this reduces chances of proxy attendance  
 
-**URL**: https://lovable.dev/projects/28e70937-ee3f-4984-a5f9-482bfbe27b75
+**URL**: https://qr-smart-log.lovable.app/
 
 ## How can I edit this code?
 
