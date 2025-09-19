@@ -1,20 +1,23 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Calendar, Users, QrCode } from 'lucide-react';
 import { QRCodeGenerator } from '@/components/ui/qr-code-generator';
+import { Calendar, Clock, Users, Plus, QrCode, Eye, EyeOff } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 
 interface AttendanceClass {
   id: string;
   name: string;
   date: string;
   time: string;
-  qrCode: string;
-  attendees: number;
-  maxAttendees: number;
+  qr_code: string;
+  max_attendees: number;
+  created_at: string;
+  currentAttendees?: number;
 }
 
 interface ClassManagementProps {
@@ -22,165 +25,242 @@ interface ClassManagementProps {
 }
 
 export const ClassManagement = ({ onClassSelect }: ClassManagementProps) => {
-  const [classes, setClasses] = useState<AttendanceClass[]>([
-    {
-      id: '1',
-      name: 'Computer Science 101',
-      date: '2024-01-15',
-      time: '09:00',
-      qrCode: 'CS101-2024-01-15-09:00',
-      attendees: 28,
-      maxAttendees: 30
-    },
-    {
-      id: '2',
-      name: 'Mathematics Advanced',
-      date: '2024-01-15',
-      time: '11:00',
-      qrCode: 'MATH-ADV-2024-01-15-11:00',
-      attendees: 22,
-      maxAttendees: 25
-    }
-  ]);
-
+  const [classes, setClasses] = useState<AttendanceClass[]>([]);
   const [newClass, setNewClass] = useState({
     name: '',
     date: '',
     time: '',
-    maxAttendees: ''
+    maxAttendees: 30
   });
+  const [showQrCode, setShowQrCode] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const { toast } = useToast();
 
-  const [showQRCode, setShowQRCode] = useState<string | null>(null);
+  // Fetch classes from database
+  const fetchClasses = async () => {
+    const { data, error } = await supabase
+      .from('classes')
+      .select('*')
+      .order('created_at', { ascending: false });
 
-  const handleCreateClass = () => {
-    if (!newClass.name || !newClass.date || !newClass.time || !newClass.maxAttendees) return;
+    if (error) {
+      toast({
+        title: "Error",
+        description: "Failed to fetch classes",
+        variant: "destructive"
+      });
+    } else {
+      // Get attendance count for each class
+      const classesWithAttendance = await Promise.all(
+        (data || []).map(async (classItem) => {
+          const { count } = await supabase
+            .from('attendance_records')
+            .select('*', { count: 'exact', head: true })
+            .eq('class_id', classItem.id);
+          
+          return {
+            ...classItem,
+            currentAttendees: count || 0
+          };
+        })
+      );
+      setClasses(classesWithAttendance);
+    }
+  };
 
-    const classId = Date.now().toString();
-    const qrCode = `${newClass.name.replace(/\s+/g, '-').toUpperCase()}-${newClass.date}-${newClass.time}`;
-    
-    const attendanceClass: AttendanceClass = {
-      id: classId,
-      name: newClass.name,
-      date: newClass.date,
-      time: newClass.time,
-      qrCode,
-      attendees: 0,
-      maxAttendees: parseInt(newClass.maxAttendees)
-    };
+  useEffect(() => {
+    fetchClasses();
+  }, []);
 
-    setClasses([...classes, attendanceClass]);
-    setNewClass({ name: '', date: '', time: '', maxAttendees: '' });
+  const handleCreateClass = async () => {
+    if (!newClass.name || !newClass.date || !newClass.time) {
+      toast({
+        title: "Error",
+        description: "All fields are required",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setLoading(true);
+
+    const qrCode = `CLASS:${newClass.name}:${newClass.date}:${newClass.time}:${Date.now()}`;
+
+    const { data, error } = await supabase
+      .from('classes')
+      .insert([{
+        name: newClass.name,
+        date: newClass.date,
+        time: newClass.time,
+        max_attendees: newClass.maxAttendees,
+        qr_code: qrCode
+      }])
+      .select()
+      .single();
+
+    setLoading(false);
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: "Failed to create class",
+        variant: "destructive"
+      });
+    } else {
+      toast({
+        title: "Success",
+        description: "Class created successfully",
+      });
+      setNewClass({ name: '', date: '', time: '', maxAttendees: 30 });
+      fetchClasses();
+    }
+  };
+
+  const toggleQrCode = (classId: string) => {
+    setShowQrCode(showQrCode === classId ? null : classId);
   };
 
   return (
     <div className="space-y-6">
-      <Card>
+      {/* Create Class Form */}
+      <Card className="glass-card">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Plus className="h-5 w-5" />
             Create New Class Session
           </CardTitle>
+          <CardDescription>Set up a new class session and generate QR code</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="className">Class Name</Label>
+            <div className="space-y-2">
+              <Label htmlFor="name">Class Name</Label>
               <Input
-                id="className"
+                id="name"
                 value={newClass.name}
                 onChange={(e) => setNewClass({ ...newClass, name: e.target.value })}
                 placeholder="e.g., Computer Science 101"
               />
             </div>
-            <div>
+            <div className="space-y-2">
               <Label htmlFor="maxAttendees">Max Attendees</Label>
               <Input
                 id="maxAttendees"
                 type="number"
                 value={newClass.maxAttendees}
-                onChange={(e) => setNewClass({ ...newClass, maxAttendees: e.target.value })}
+                onChange={(e) => setNewClass({ ...newClass, maxAttendees: parseInt(e.target.value) || 30 })}
                 placeholder="30"
               />
             </div>
-            <div>
-              <Label htmlFor="classDate">Date</Label>
+            <div className="space-y-2">
+              <Label htmlFor="date">Date</Label>
               <Input
-                id="classDate"
+                id="date"
                 type="date"
                 value={newClass.date}
                 onChange={(e) => setNewClass({ ...newClass, date: e.target.value })}
               />
             </div>
-            <div>
-              <Label htmlFor="classTime">Time</Label>
+            <div className="space-y-2">
+              <Label htmlFor="time">Time</Label>
               <Input
-                id="classTime"
+                id="time"
                 type="time"
                 value={newClass.time}
                 onChange={(e) => setNewClass({ ...newClass, time: e.target.value })}
               />
             </div>
           </div>
-          <Button onClick={handleCreateClass} className="w-full">
-            Create Class Session
+          <Button 
+            onClick={handleCreateClass} 
+            className="w-full"
+            disabled={loading}
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            {loading ? 'Creating...' : 'Create Class Session'}
           </Button>
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {classes.map((classItem) => (
-          <Card key={classItem.id} className="hover:shadow-lg transition-shadow">
-            <CardHeader>
-              <CardTitle className="text-lg">{classItem.name}</CardTitle>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Calendar className="h-4 w-4" />
-                {classItem.date} at {classItem.time}
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Users className="h-4 w-4" />
-                  <span className="text-sm">
-                    {classItem.attendees} / {classItem.maxAttendees}
-                  </span>
-                </div>
-                <Badge 
-                  variant={classItem.attendees < classItem.maxAttendees ? "secondary" : "destructive"}
-                >
-                  {classItem.attendees < classItem.maxAttendees ? "Open" : "Full"}
-                </Badge>
-              </div>
-              
-              <div className="space-y-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full"
-                  onClick={() => setShowQRCode(showQRCode === classItem.id ? null : classItem.id)}
-                >
-                  <QrCode className="h-4 w-4 mr-2" />
-                  {showQRCode === classItem.id ? "Hide QR Code" : "Show QR Code"}
-                </Button>
-                
-                {showQRCode === classItem.id && (
-                  <div className="flex justify-center p-4 bg-white rounded-lg border">
-                    <QRCodeGenerator value={classItem.qrCode} size={150} />
+      {/* Classes List */}
+      <Card className="glass-card">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Calendar className="h-5 w-5" />
+            Class Sessions ({classes.length})
+          </CardTitle>
+          <CardDescription>Manage your class sessions and QR codes</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {classes.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              No classes created yet. Create your first class above.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {classes.map((classItem) => (
+                <div key={classItem.id} className="border rounded-lg p-4 space-y-3">
+                  <div>
+                    <h3 className="font-medium">{classItem.name}</h3>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
+                      <Calendar className="h-4 w-4" />
+                      {classItem.date} at {classItem.time}
+                    </div>
+                    <div className="flex items-center justify-between mt-2">
+                      <div className="flex items-center gap-2">
+                        <Users className="h-4 w-4" />
+                        <span className="text-sm text-muted-foreground">
+                          {classItem.currentAttendees || 0}/{classItem.max_attendees} attendees
+                        </span>
+                      </div>
+                      <Badge variant={(classItem.currentAttendees || 0) >= classItem.max_attendees ? "destructive" : "secondary"}>
+                        {(classItem.currentAttendees || 0) >= classItem.max_attendees ? 'Full' : 'Open'}
+                      </Badge>
+                    </div>
                   </div>
-                )}
-                
-                <Button
-                  size="sm"
-                  className="w-full"
-                  onClick={() => onClassSelect?.(classItem)}
-                >
-                  View Details
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+
+                  {/* QR Code Display */}
+                  {showQrCode === classItem.id && (
+                    <div className="mt-4 p-4 bg-background/50 rounded-lg">
+                      <div className="flex flex-col items-center space-y-2">
+                        <QRCodeGenerator 
+                          value={classItem.qr_code} 
+                          size={150}
+                        />
+                        <p className="text-xs text-muted-foreground text-center">
+                          Scan this QR code to mark attendance for this class
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => toggleQrCode(classItem.id)}
+                    >
+                      {showQrCode === classItem.id ? (
+                        <><EyeOff className="h-4 w-4 mr-1" /> Hide QR</>
+                      ) : (
+                        <><QrCode className="h-4 w-4 mr-1" /> Show QR</>
+                      )}
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => onClassSelect?.(classItem)}
+                    >
+                      Select
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 };

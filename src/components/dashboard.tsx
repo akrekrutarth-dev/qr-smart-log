@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { ClassManagement } from '@/components/class-management';
-import { AttendanceScanner } from '@/components/attendance-scanner';
+import { ClassManagement } from './class-management';
+import { AttendanceScanner } from './attendance-scanner';
+import { StudentManagement } from './student-management';
 import { 
   BarChart3, 
   Users, 
@@ -13,7 +14,8 @@ import {
   GraduationCap,
   Clock,
   CheckCircle2,
-  TrendingUp
+  TrendingUp,
+  UserPlus
 } from 'lucide-react';
 
 interface AttendanceStats {
@@ -48,25 +50,18 @@ export const Dashboard = () => {
           </div>
         </header>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="overview" className="flex items-center gap-2">
-              <BarChart3 className="h-4 w-4" />
-              Overview
-            </TabsTrigger>
-            <TabsTrigger value="manage" className="flex items-center gap-2">
-              <Calendar className="h-4 w-4" />
-              Manage Classes
-            </TabsTrigger>
-            <TabsTrigger value="scan" className="flex items-center gap-2">
-              <QrCode className="h-4 w-4" />
-              Mark Attendance
-            </TabsTrigger>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="students">Manage Students</TabsTrigger>
+            <TabsTrigger value="classes">Manage Classes</TabsTrigger>
+            <TabsTrigger value="attendance">Mark Attendance</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6">
+            {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <Card className="hover:shadow-lg transition-shadow">
+              <Card className="glass-card hover:shadow-lg transition-shadow">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Total Classes</CardTitle>
                   <Calendar className="h-4 w-4 text-muted-foreground" />
@@ -77,7 +72,7 @@ export const Dashboard = () => {
                 </CardContent>
               </Card>
 
-              <Card className="hover:shadow-lg transition-shadow">
+              <Card className="glass-card hover:shadow-lg transition-shadow">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Total Students</CardTitle>
                   <Users className="h-4 w-4 text-muted-foreground" />
@@ -88,7 +83,7 @@ export const Dashboard = () => {
                 </CardContent>
               </Card>
 
-              <Card className="hover:shadow-lg transition-shadow">
+              <Card className="glass-card hover:shadow-lg transition-shadow">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Attendance Rate</CardTitle>
                   <TrendingUp className="h-4 w-4 text-muted-foreground" />
@@ -99,7 +94,7 @@ export const Dashboard = () => {
                 </CardContent>
               </Card>
 
-              <Card className="hover:shadow-lg transition-shadow">
+              <Card className="glass-card hover:shadow-lg transition-shadow">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Active Classes</CardTitle>
                   <Clock className="h-4 w-4 text-muted-foreground" />
@@ -112,9 +107,10 @@ export const Dashboard = () => {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Card>
+              <Card className="glass-card">
                 <CardHeader>
                   <CardTitle>Recent Activity</CardTitle>
+                  <CardDescription>Latest attendance sessions</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="flex items-center gap-3 p-3 border rounded-lg">
@@ -146,24 +142,34 @@ export const Dashboard = () => {
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className="glass-card">
                 <CardHeader>
                   <CardTitle>Quick Actions</CardTitle>
+                  <CardDescription>Common tasks and shortcuts</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <Button 
                     className="w-full justify-start" 
                     variant="outline"
-                    onClick={() => setActiveTab("manage")}
+                    onClick={() => setActiveTab("students")}
                   >
-                    <Calendar className="h-4 w-4 mr-2" />
-                    Create New Class Session
+                    <UserPlus className="h-4 w-4 mr-2" />
+                    Add New Student
                   </Button>
                   
                   <Button 
                     className="w-full justify-start" 
                     variant="outline"
-                    onClick={() => setActiveTab("scan")}
+                    onClick={() => setActiveTab("classes")}
+                  >
+                    <Calendar className="h-4 w-4 mr-2" />
+                    Create Class Session
+                  </Button>
+                  
+                  <Button 
+                    className="w-full justify-start" 
+                    variant="outline"
+                    onClick={() => setActiveTab("attendance")}
                   >
                     <QrCode className="h-4 w-4 mr-2" />
                     Mark Attendance
@@ -171,23 +177,22 @@ export const Dashboard = () => {
                   
                   <Button className="w-full justify-start" variant="outline">
                     <BarChart3 className="h-4 w-4 mr-2" />
-                    View Detailed Reports
-                  </Button>
-                  
-                  <Button className="w-full justify-start" variant="outline">
-                    <Users className="h-4 w-4 mr-2" />
-                    Manage Students
+                    View Reports
                   </Button>
                 </CardContent>
               </Card>
             </div>
           </TabsContent>
 
-          <TabsContent value="manage">
+          <TabsContent value="students" className="space-y-6">
+            <StudentManagement />
+          </TabsContent>
+
+          <TabsContent value="classes" className="space-y-6">
             <ClassManagement />
           </TabsContent>
 
-          <TabsContent value="scan">
+          <TabsContent value="attendance" className="space-y-6">
             <AttendanceScanner />
           </TabsContent>
         </Tabs>
