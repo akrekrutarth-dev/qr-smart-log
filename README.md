@@ -35,4 +35,5 @@ This project is built with:
 - shadcn-ui
 - Tailwind CSS
 
+It uses superbase for backend you definatly intigrate backend with github itself
 
