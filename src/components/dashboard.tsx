@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -19,6 +19,8 @@ import {
   UserPlus,
   LineChart
 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 
 interface AttendanceStats {
   totalClasses: number;
@@ -27,15 +29,188 @@ interface AttendanceStats {
   activeClasses: number;
 }
 
+interface RecentClass {
+  id: string;
+  name: string;
+  date: string;
+  time: string;
+  attendanceCount: number;
+  maxAttendees: number;
+  created_at: string;
+}
+
 export const Dashboard = () => {
   const [activeTab, setActiveTab] = useState("overview");
-  
-  const stats: AttendanceStats = {
-    totalClasses: 12,
-    totalStudents: 245,
-    attendanceRate: 87.5,
-    activeClasses: 3
+  const [stats, setStats] = useState<AttendanceStats>({
+    totalClasses: 0,
+    totalStudents: 0,
+    attendanceRate: 0,
+    activeClasses: 0
+  });
+  const [recentClasses, setRecentClasses] = useState<RecentClass[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
+
+  const fetchDashboardData = async () => {
+    setLoading(true);
+    try {
+      // Fetch total classes
+      const { count: totalClasses } = await supabase
+        .from('classes')
+        .select('*', { count: 'exact', head: true });
+
+      // Fetch total students
+      const { count: totalStudents } = await supabase
+        .from('students')
+        .select('*', { count: 'exact', head: true });
+
+      // Fetch recent classes with attendance data
+      const { data: classesData, error: classesError } = await supabase
+        .from('classes')
+        .select(`
+          id,
+          name,
+          date,
+          time,
+          max_attendees,
+          created_at,
+          attendance_records(count)
+        `)
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      if (classesError) throw classesError;
+
+      // Calculate attendance rate
+      let totalAttendanceRecords = 0;
+      let totalPossibleAttendance = 0;
+
+      const recentClassesData: RecentClass[] = (classesData || []).map((classItem) => {
+        const attendanceCount = classItem.attendance_records?.[0]?.count || 0;
+        totalAttendanceRecords += attendanceCount;
+        totalPossibleAttendance += classItem.max_attendees;
+
+        return {
+          id: classItem.id,
+          name: classItem.name,
+          date: classItem.date,
+          time: classItem.time,
+          attendanceCount,
+          maxAttendees: classItem.max_attendees,
+          created_at: classItem.created_at
+        };
+      });
+
+      const attendanceRate = totalPossibleAttendance > 0 
+        ? (totalAttendanceRecords / totalPossibleAttendance) * 100 
+        : 0;
+
+      // Check for active classes (today's classes)
+      const today = new Date().toISOString().split('T')[0];
+      const { count: activeClasses } = await supabase
+        .from('classes')
+        .select('*', { count: 'exact', head: true })
+        .eq('date', today);
+
+      setStats({
+        totalClasses: totalClasses || 0,
+        totalStudents: totalStudents || 0,
+        attendanceRate: Math.round(attendanceRate * 10) / 10,
+        activeClasses: activeClasses || 0
+      });
+
+      setRecentClasses(recentClassesData);
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load dashboard data",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
   };
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  // Real-time updates for classes
+  useEffect(() => {
+    const channel = supabase
+      .channel('dashboard-updates')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'classes'
+        },
+        () => {
+          fetchDashboardData();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'students'
+        },
+        () => {
+          fetchDashboardData();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'attendance_records'
+        },
+        () => {
+          fetchDashboardData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
+  };
+
+  const formatTime = (timeString: string) => {
+    return new Date(`2000-01-01T${timeString}`).toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
+  };
+
+  const isToday = (dateString: string) => {
+    const today = new Date().toISOString().split('T')[0];
+    return dateString === today;
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-bg flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-bg">
@@ -113,35 +288,47 @@ export const Dashboard = () => {
               <Card className="glass-card">
                 <CardHeader>
                   <CardTitle>Recent Activity</CardTitle>
-                  <CardDescription>Latest attendance sessions</CardDescription>
+                  <CardDescription>Latest class sessions</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="flex items-center gap-3 p-3 border rounded-lg">
-                    <CheckCircle2 className="h-5 w-5 text-success" />
-                    <div className="flex-1">
-                      <p className="font-medium">Computer Science 101</p>
-                      <p className="text-sm text-muted-foreground">28/30 students attended</p>
+                  {recentClasses.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <Calendar className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                      <p>No classes created yet</p>
+                      <p className="text-sm">Create your first class to see activity here</p>
                     </div>
-                    <Badge variant="secondary">09:00 AM</Badge>
-                  </div>
-                  
-                  <div className="flex items-center gap-3 p-3 border rounded-lg">
-                    <CheckCircle2 className="h-5 w-5 text-success" />
-                    <div className="flex-1">
-                      <p className="font-medium">Mathematics Advanced</p>
-                      <p className="text-sm text-muted-foreground">22/25 students attended</p>
-                    </div>
-                    <Badge variant="secondary">11:00 AM</Badge>
-                  </div>
-                  
-                  <div className="flex items-center gap-3 p-3 border rounded-lg">
-                    <Clock className="h-5 w-5 text-warning" />
-                    <div className="flex-1">
-                      <p className="font-medium">Physics Lab</p>
-                      <p className="text-sm text-muted-foreground">In progress</p>
-                    </div>
-                    <Badge>Live</Badge>
-                  </div>
+                  ) : (
+                    recentClasses.map((classItem) => (
+                      <div key={classItem.id} className="flex items-center gap-3 p-3 border rounded-lg">
+                        {isToday(classItem.date) ? (
+                          <Clock className="h-5 w-5 text-warning" />
+                        ) : classItem.attendanceCount > 0 ? (
+                          <CheckCircle2 className="h-5 w-5 text-success" />
+                        ) : (
+                          <Calendar className="h-5 w-5 text-muted-foreground" />
+                        )}
+                        <div className="flex-1">
+                          <p className="font-medium">{classItem.name}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {classItem.attendanceCount > 0 
+                              ? `${classItem.attendanceCount}/${classItem.maxAttendees} students attended`
+                              : `Scheduled for ${formatDate(classItem.date)}`
+                            }
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <Badge variant={isToday(classItem.date) ? "default" : "secondary"}>
+                            {isToday(classItem.date) ? "Today" : formatTime(classItem.time)}
+                          </Badge>
+                          {isToday(classItem.date) && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {formatTime(classItem.time)}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </CardContent>
               </Card>
 
