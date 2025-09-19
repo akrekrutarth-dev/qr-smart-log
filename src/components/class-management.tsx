@@ -5,9 +5,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { QRCodeGenerator } from '@/components/ui/qr-code-generator';
-import { Calendar, Clock, Users, Plus, QrCode, Eye, EyeOff } from 'lucide-react';
+import { Calendar, Clock, Users, Plus, QrCode, Eye, EyeOff, BarChart3 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { ClassAnalytics } from './class-analytics';
 
 interface AttendanceClass {
   id: string;
@@ -33,6 +34,7 @@ export const ClassManagement = ({ onClassSelect }: ClassManagementProps) => {
     maxAttendees: 30
   });
   const [showQrCode, setShowQrCode] = useState<string | null>(null);
+  const [showAnalytics, setShowAnalytics] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
@@ -118,6 +120,10 @@ export const ClassManagement = ({ onClassSelect }: ClassManagementProps) => {
 
   const toggleQrCode = (classId: string) => {
     setShowQrCode(showQrCode === classId ? null : classId);
+  };
+
+  const toggleAnalytics = (classId: string) => {
+    setShowAnalytics(showAnalytics === classId ? null : classId);
   };
 
   return (
@@ -234,6 +240,13 @@ export const ClassManagement = ({ onClassSelect }: ClassManagementProps) => {
                     </div>
                   )}
 
+                  {/* Analytics Display */}
+                  {showAnalytics === classItem.id && (
+                    <div className="mt-4">
+                      <ClassAnalytics classId={classItem.id} />
+                    </div>
+                  )}
+
                   <div className="flex gap-2">
                     <Button
                       variant="outline"
@@ -245,6 +258,18 @@ export const ClassManagement = ({ onClassSelect }: ClassManagementProps) => {
                         <><EyeOff className="h-4 w-4 mr-1" /> Hide QR</>
                       ) : (
                         <><QrCode className="h-4 w-4 mr-1" /> Show QR</>
+                      )}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => toggleAnalytics(classItem.id)}
+                    >
+                      {showAnalytics === classItem.id ? (
+                        <><EyeOff className="h-4 w-4 mr-1" /> Hide Stats</>
+                      ) : (
+                        <><BarChart3 className="h-4 w-4 mr-1" /> Analytics</>
                       )}
                     </Button>
                     <Button

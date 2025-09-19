@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { ClassManagement } from './class-management';
 import { AttendanceScanner } from './attendance-scanner';
 import { StudentManagement } from './student-management';
+import { ClassAnalytics } from './class-analytics';
 import { 
   BarChart3, 
   Users, 
@@ -15,7 +16,8 @@ import {
   Clock,
   CheckCircle2,
   TrendingUp,
-  UserPlus
+  UserPlus,
+  LineChart
 } from 'lucide-react';
 
 interface AttendanceStats {
@@ -51,11 +53,12 @@ export const Dashboard = () => {
         </header>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="students">Manage Students</TabsTrigger>
             <TabsTrigger value="classes">Manage Classes</TabsTrigger>
             <TabsTrigger value="attendance">Mark Attendance</TabsTrigger>
+            <TabsTrigger value="analytics">Analytics</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6">
@@ -175,9 +178,13 @@ export const Dashboard = () => {
                     Mark Attendance
                   </Button>
                   
-                  <Button className="w-full justify-start" variant="outline">
+                  <Button 
+                    className="w-full justify-start" 
+                    variant="outline"
+                    onClick={() => setActiveTab("analytics")}
+                  >
                     <BarChart3 className="h-4 w-4 mr-2" />
-                    View Reports
+                    View Analytics
                   </Button>
                 </CardContent>
               </Card>
@@ -194,6 +201,21 @@ export const Dashboard = () => {
 
           <TabsContent value="attendance" className="space-y-6">
             <AttendanceScanner />
+          </TabsContent>
+
+          <TabsContent value="analytics" className="space-y-6">
+            <div className="space-y-6">
+              <div className="flex items-center gap-2">
+                <LineChart className="h-6 w-6" />
+                <div>
+                  <h2 className="text-2xl font-bold">Smart Analytics</h2>
+                  <p className="text-muted-foreground">Detailed insights into class performance and attendance patterns</p>
+                </div>
+              </div>
+              
+              <ClassAnalytics showSummary />
+              <ClassAnalytics />
+            </div>
           </TabsContent>
         </Tabs>
       </div>
